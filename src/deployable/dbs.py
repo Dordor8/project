@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 from src.exceptions import DeploymentException
 from pymongo import MongoClient
+import configparser
+
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 class DBService(ABC):
     @abstractmethod
@@ -14,14 +18,15 @@ class DBService(ABC):
 
 class MongoDBService(DBService):
     def __init__(self):
-        self.client = MongoClient("mongodb://localhost:27017")
+
+        self.client = MongoClient(config['DEPLOYMENTS_URL']['mongodb'])
 
     def is_db_exist(self, db_name: str) -> bool:
         return db_name in self.client.list_database_names()
 
     def create_db(self, db_name: str) -> None:
         if not self.is_db_exist(db_name):
-            db = self.client[db_name]
+            pass
         else:
             raise DeploymentException(f"MongoDB database: {db_name}  already exists")
 
