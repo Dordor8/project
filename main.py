@@ -1,6 +1,5 @@
-from src.deployable.dbs import MongoDBService
+from src.logic.manager import MongoDBService, engine
+from sqlalchemy import inspect
 
-if __name__ == '__main__':
+if "__main__" == __name__:
     m = MongoDBService()
-    m.drop_db('test')
-    print(m.client.list_database_names())
