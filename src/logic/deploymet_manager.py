@@ -78,6 +78,10 @@ class MongoDBService(DBService):
         if self.session.query(Deployment).filter(and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name do not exists")
 
+    def get_deployment_by_id(self, deployment_id: str) -> Deployment | None:
+        return self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
+                                                           Deployment.status == True)).first()
+
     def new_deployment(self, db_name: str, username: str) -> str:
         if self.session.query(Deployment).filter(and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name already exists")
@@ -95,8 +99,7 @@ class MongoDBService(DBService):
         return deployment_id
 
     def get_deployment_info(self, deployment_id: str) -> dict:
-        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
-                                                           Deployment.status == True)).first()
+        deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
 
         return {'id': deployment.id, 'db_name': deployment.db_name, 'created_at': deployment.created_at}
@@ -104,7 +107,7 @@ class MongoDBService(DBService):
 
 
     def update_database_name(self, deployment_id: str, new_db_name: str, username: str) -> str:
-        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id, Deployment.status == True)).first()
+        deployment = self.get_deployment_by_id(deployment_id)
 
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
@@ -120,8 +123,7 @@ class MongoDBService(DBService):
         return deployment_id
 
     def drop_deployment(self, deployment_id: str, username: str) -> None:
-        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
-                                                           Deployment.status == True)).first()
+        deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
 
@@ -130,8 +132,7 @@ class MongoDBService(DBService):
         self.session.commit()
 
     def get_deployment_connection_string(self, deployment_id: str, username: str) -> str:
-        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
-                                                           Deployment.status == True)).first()
+        deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
 
