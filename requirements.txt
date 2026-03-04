@@ -4,3 +4,4 @@ faker
 fastapi
 uvicorn
 pymongo
+pydantic
