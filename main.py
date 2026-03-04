@@ -1,4 +1,4 @@
-from src.logic.manager import MongoDBService, engine
+from src.logic.deploymet_manager import MongoDBService, engine
 from sqlalchemy import inspect
 
 if "__main__" == __name__:
