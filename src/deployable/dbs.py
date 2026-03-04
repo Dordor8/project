@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from src.exceptions import DeploymentException
 from pymongo import MongoClient
 
 class DBService(ABC):
@@ -23,10 +23,10 @@ class MongoDBService(DBService):
         if not self.is_db_exist(db_name):
             db = self.client[db_name]
         else:
-            raise Exception()
+            raise DeploymentException(f"MongoDB database: {db_name}  already exists")
 
     def drop_db(self, db_name: str) -> None:
         if self.is_db_exist(db_name):
             self.client.drop_database(db_name)
         else:
-            raise Exception()
+            raise DeploymentException(f"MongoDB database: {db_name}  do not exists")
