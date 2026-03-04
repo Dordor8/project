@@ -4,11 +4,13 @@ from abc import ABC, abstractmethod
 from uuid import uuid1
 
 from pymongo import MongoClient
-from sqlalchemy import create_engine, Column, String, BOOLEAN, TIMESTAMP, and_
+from sqlalchemy import create_engine, Column, String, BOOLEAN, TIMESTAMP, and_, ForeignKey
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from src.exceptions import DeploymentException
+from hashlib import sha256
+from sqlalchemy import Enum
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -26,6 +28,14 @@ class Deployment(Base):
     status = Column(BOOLEAN)
     username = Column(String)
     created_at = Column(TIMESTAMP)
+
+
+class User(Base):
+    __tablename__ = 'users'
+    deployment_id = Column(ForeignKey('deployments.id'))
+    username = Column(String)
+    hashed_password = Column(String)
+    permission_level = Column(Enum('read', 'readWrite'))
 
 
 class DBService(ABC):
@@ -53,7 +63,7 @@ class DBService(ABC):
 class MongoDBService(DBService):
     def __init__(self):
         self.mongo_client = MongoClient(
-            f"mongodb://{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}")
+            f"mongodb://{config['DEPLOYMENTS_PRAM']['mongo_admin_user']}:{config['DEPLOYMENTS_PRAM']['mongo_admin_password']}@{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}")
         Base.metadata.create_all(bind=engine)
 
         Session = sessionmaker(bind=engine)
@@ -75,15 +85,17 @@ class MongoDBService(DBService):
             raise DeploymentException("Deployment name must start with the username")
 
     def check_deployment_name_availability(self, db_name: str):
-        if self.session.query(Deployment).filter(and_(Deployment.db_name == db_name, Deployment.status == True)).first():
+        if self.session.query(Deployment).filter(
+                and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name do not exists")
 
     def get_deployment_by_id(self, deployment_id: str) -> Deployment | None:
         return self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
-                                                           Deployment.status == True)).first()
+                                                          Deployment.status == True)).first()
 
     def new_deployment(self, db_name: str, username: str) -> str:
-        if self.session.query(Deployment).filter(and_(Deployment.db_name == db_name, Deployment.status == True)).first():
+        if self.session.query(Deployment).filter(
+                and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name already exists")
 
         self.check_name_startwith_username(db_name, username)
@@ -103,8 +115,6 @@ class MongoDBService(DBService):
         self.check_deployment_exist(deployment)
 
         return {'id': deployment.id, 'db_name': deployment.db_name, 'created_at': deployment.created_at}
-
-
 
     def update_database_name(self, deployment_id: str, new_db_name: str, username: str) -> str:
         deployment = self.get_deployment_by_id(deployment_id)
