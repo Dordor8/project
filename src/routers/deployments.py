@@ -1,8 +1,7 @@
 from typing import Annotated
 from fastapi import Depends, APIRouter
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.responses import JSONResponse
-from starlette import status
+from fastapi.responses import JSONResponse, Response
 
 from src.logic.deploymet_manager import DBService, MongoDBService
 from src.requests_objects import DBNameRequest
@@ -43,9 +42,8 @@ def update_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(secur
 @router.delete('/deployments/{deployment_id}')
 def delete_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(security)], deployment_id: str):
     mongo_deployment.drop_deployment(deployment_id, credentials.username)
-    return JSONResponse(
-        status_code=204,
-        content={"message": "deployment deleted"}
+    return Response(
+        status_code=204
     )
 
 

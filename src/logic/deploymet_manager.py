@@ -127,6 +127,7 @@ class MongoDBService(DBService):
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
 
+        deployment.status = False
         self.mongo_client.drop_database(str(deployment.db_name))
 
         self.session.commit()
