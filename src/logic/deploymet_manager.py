@@ -127,5 +127,10 @@ class MongoDBService(DBService):
 
         self.session.commit()
 
-    def get_deployment_connection_string(self, db_name: str, username: str) -> str:
-        pass
+    def get_deployment_connection_string(self, deployment_id: str, username: str) -> str:
+        deployment = self.session.query(Deployment).filter(Deployment.id == deployment_id,
+                                                           Deployment.status == True).first()
+        self.check_deployment_exist(deployment)
+        self.check_deployment_username(deployment, username)
+
+        return f"mongodb://{config['MONGO_HOST']}:{config['MONGO_PORT']}/{deployment.db_name}"
