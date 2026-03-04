@@ -158,7 +158,6 @@ env.bak/
 venv.bak/
 
 #volume mount folders
-init/
 mongodb/
 
 # Spyder project settings
