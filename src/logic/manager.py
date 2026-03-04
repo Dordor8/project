@@ -32,7 +32,7 @@ class DBService(ABC):
         pass
 
     @abstractmethod
-    def get_deployment_info(self, db_name: str, username: str) -> str:
+    def get_deployment_info(self, deployment_id: str) -> str:
         pass
 
     @abstractmethod
@@ -74,8 +74,12 @@ class MongoDBService(DBService):
         self.session.commit()
         return deployment_id
 
-    def get_deployment_info(self, db_name: str, username: str) -> str:
-        pass
+    def get_deployment_info(self, deployment_id: str) -> dict:
+        deployment = self.session.query(Deployment).filter(Deployment.id == deployment_id).first()
+        if deployment:
+            return {'id': deployment.id, 'db_name': deployment.db_name, 'created_at': deployment.created_at}
+        else:
+            raise DeploymentException("Deployment id not found")
 
     def update_database_name(self, current_db_name: str, new_db_name: str, username: str) -> str:
         pass

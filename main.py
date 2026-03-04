@@ -3,4 +3,4 @@ from sqlalchemy import inspect
 
 if "__main__" == __name__:
     m = MongoDBService()
-    print(m.new_deployment('test-my_db2', 'test'))
+    print(m.get_deployment_info('59398f9c-17e9-11f1-a854-70a6cc1ea52c'))
