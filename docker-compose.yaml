@@ -2,12 +2,18 @@ version: '3'
 networks:
   dem:
 services:
-#  mongodb:
-#    image: mongodb/mongodb-community-server:latest
-#    ports:
-#      - "27017:27017"
-#    volumes:
-#      - ./mongodb:/data/db
+  mongo-db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongoadmin
+      MONGO_INITDB_ROOT_PASSWORD: mongopasswd
+    volumes:
+      - mongodb:/data/db
+      - type: bind
+        source: ./mongo-entrypoint
+        target: /docker-entrypoint-initdb.d/
   postgres:
     image: postgres:latest
     restart: always
@@ -32,3 +38,5 @@ services:
       - postgres
     networks:
       - dem
+volumes:
+  mongodb:
