@@ -1,12 +1,14 @@
-from abc import ABC, abstractmethod
-from src.exceptions import DeploymentException
-from pymongo import MongoClient
 import configparser
-from sqlalchemy import create_engine, Column, INT, String, BOOLEAN, TIMESTAMP, text
+import datetime
+from abc import ABC, abstractmethod
+from uuid import uuid1
+
+from pymongo import MongoClient
+from sqlalchemy import create_engine, Column, String, BOOLEAN, TIMESTAMP, and_
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
-from uuid import uuid1
-import datetime
+
+from src.exceptions import DeploymentException
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -73,11 +75,11 @@ class MongoDBService(DBService):
             raise DeploymentException("Deployment name must start with the username")
 
     def check_deployment_name_availability(self, db_name: str):
-        if self.session.query(Deployment).filter(Deployment.db_name == db_name).first():
-            raise DeploymentException("Deployment name already exists")
+        if self.session.query(Deployment).filter(and_(Deployment.db_name == db_name, Deployment.status == True)).first():
+            raise DeploymentException("Deployment name do not exists")
 
     def new_deployment(self, db_name: str, username: str) -> str:
-        if self.session.query(Deployment).filter(Deployment.db_name == db_name, Deployment.status == True).first():
+        if self.session.query(Deployment).filter(and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name already exists")
 
         self.check_name_startwith_username(db_name, username)
@@ -93,8 +95,8 @@ class MongoDBService(DBService):
         return deployment_id
 
     def get_deployment_info(self, deployment_id: str) -> dict:
-        deployment = self.session.query(Deployment).filter(Deployment.id == deployment_id,
-                                                           Deployment.status == True).first()
+        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
+                                                           Deployment.status == True)).first()
         self.check_deployment_exist(deployment)
 
         return {'id': deployment.id, 'db_name': deployment.db_name, 'created_at': deployment.created_at}
@@ -102,7 +104,7 @@ class MongoDBService(DBService):
 
 
     def update_database_name(self, deployment_id: str, new_db_name: str, username: str) -> str:
-        deployment = self.session.query(Deployment).filter(Deployment.id == deployment_id, Deployment.status == True).first()
+        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id, Deployment.status == True)).first()
 
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
@@ -118,8 +120,8 @@ class MongoDBService(DBService):
         return deployment_id
 
     def drop_deployment(self, deployment_id: str, username: str) -> None:
-        deployment = self.session.query(Deployment).filter(Deployment.id == deployment_id,
-                                                           Deployment.status == True).first()
+        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
+                                                           Deployment.status == True)).first()
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
 
@@ -128,9 +130,9 @@ class MongoDBService(DBService):
         self.session.commit()
 
     def get_deployment_connection_string(self, deployment_id: str, username: str) -> str:
-        deployment = self.session.query(Deployment).filter(Deployment.id == deployment_id,
-                                                           Deployment.status == True).first()
+        deployment = self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
+                                                           Deployment.status == True)).first()
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
 
-        return f"mongodb://{config['MONGO_HOST']}:{config['MONGO_PORT']}/{deployment.db_name}"
+        return f"mongodb://{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}/{deployment.db_name}"
