@@ -80,11 +80,6 @@ class MongoDBService(DBService):
             raise DeploymentException("Deployment id not found")
 
     @staticmethod
-    def check_deployment_username(deployment: Deployment, username: str):
-        if deployment.username != username:
-            raise DeploymentException("Username not create this deployment")
-
-    @staticmethod
     def check_name_startwith_username(db_name: str, username: str):
         if not db_name.startswith(username):
             raise DeploymentException("Deployment name must start with the username")
@@ -171,7 +166,6 @@ class MongoDBService(DBService):
         deployment = self.get_deployment_by_id(deployment_id)
 
         self.check_deployment_exist(deployment)
-        self.check_deployment_username(deployment, username)
         self.check_deployment_name_availability(new_db_name)
         self.check_name_startwith_username(new_db_name, username)
 
@@ -190,7 +184,6 @@ class MongoDBService(DBService):
     def drop_deployment(self, deployment_id: str, username: str, password: str) -> None:
         deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
-        self.check_deployment_username(deployment, username)
 
         permission = self.get_checked_permission(username, deployment_id, password)
         self.check_editing_permission(permission)
@@ -206,7 +199,6 @@ class MongoDBService(DBService):
     def get_deployment_connection_string(self, deployment_id: str, username: str, password: str) -> str:
         deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
-        self.check_deployment_username(deployment, username)
         self.get_checked_permission(username, deployment_id, password)
 
         return f"mongodb://{username}:{password}@{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}/{deployment.db_name}"
