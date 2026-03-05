@@ -97,12 +97,38 @@ class MongoDBService(DBService):
         return self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
                                                           Deployment.status == True)).first()
 
+    @staticmethod
+    def check_password_valid(password: str) -> None:
+        if not (len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)):
+            raise UserException("Invalid password, must have at least 8 letters, 1 upper and 1 lower case letters")
+
+    @staticmethod
+    def check_username_valid(username: str) -> None:
+        if len(username) < 3:
+            raise UserException("Invalid username, must have at least 3 letters")
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        return sha256(password.encode()).hexdigest()
+
+    def get_checked_password_match_hash(self, username: str, deployment_id: str, password: str) -> type[UserPermission]:
+        permission = self.session.query(UserPermission).filter(
+            and_(UserPermission.username == username,
+                 UserPermission.deployment_id == deployment_id,
+                 UserPermission.hashed_password == self.hash_password(password))).first()
+
+        if not permission:
+            raise UserException("Permission not found")
+        else:
+            return permission
+
     def new_deployment(self, db_name: str, username: str) -> str:
         if self.session.query(Deployment).filter(
                 and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name already exists")
 
         self.check_name_startwith_username(db_name, username)
+        self.check_username_valid(username)
 
         deployment_id: str = str(uuid1())
         self.session.add(Deployment(id=deployment_id, db_name=db_name, status=True, username=username,
@@ -153,36 +179,15 @@ class MongoDBService(DBService):
 
         return f"mongodb://{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}/{deployment.db_name}"
 
-    @staticmethod
-    def check_password_valid(password: str) -> None:
-        if not (len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)):
-            raise UserException("Invalid password, must have at least 8 letters, 1 upper and 1 lower case letters")
-
-
-    @staticmethod
-    def is_username_valid(username: str) -> bool:
-        return len(username) >= 3
-
-    @staticmethod
-    def hash_password(password: str) -> str:
-        return sha256(password.encode()).hexdigest()
-
-    def get_checked_password_match_hash(self, username: str, deployment_id: str, password: str) -> type[UserPermission]:
-        permission = self.session.query(UserPermission).filter(
-            and_(UserPermission.username == username,
-         UserPermission.deployment_id == deployment_id,
-                 UserPermission.hashed_password == self.hash_password(password))).first()
-
-        if not permission:
-            raise UserException("Permission not found")
-        else:
-            return permission
-
     def add_permissions_to_user(self, username: str, password: str, deployment_id: str, permission) -> None:
         deployment = self.get_deployment_by_id(deployment_id)
 
         self.check_deployment_exist(deployment)
-        self.check_deployment_username(deployment, username)
         self.check_password_valid(password)
+        self.check_username_valid(username)
 
+        self.session.add(UserPermission(username=username, deployment_id=deployment_id, permission=permission, hashed_password=self.hash_password(password)))
 
+        self.mongo_client[str(deployment.db_name)].add_user(username, password, roles=[{'role': permission,'db': str(deployment.db_name)}])
+
+        self.session.commit()
