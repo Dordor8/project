@@ -32,10 +32,11 @@ class Deployment(Base):
 
 class UserPermission(Base):
     __tablename__ = 'user_permissions'
-    deployment_id = Column(ForeignKey('deployments.id'))
+    id = Column(String, primary_key=True)
+    deployment_id = Column(ForeignKey('deployments.id'), nullable=False)
     username = Column(String)
     hashed_password = Column(String)
-    permission_level = Column(Enum('read', 'readWrite'))
+    permission_level = Column(String)
 
 
 class DBService(ABC):
@@ -131,7 +132,7 @@ class MongoDBService(DBService):
         if self.session.query(UserPermission).filter(
                 and_(UserPermission.username == username,
                      UserPermission.deployment_id == deployment_id,
-                     UserPermission.permission == permission,
+                     UserPermission.permission_level == permission,
                      UserPermission.hashed_password == self.hash_password(password))
         ).first():
             raise UserException("Permission already exists")
@@ -146,13 +147,15 @@ class MongoDBService(DBService):
 
         deployment_id: str = str(uuid1())
 
-        self.add_permissions_to_user(username, password, deployment_id, config['MONGO_PERMISSION']['read_and_write'])
-
         self.session.add(Deployment(id=deployment_id, db_name=db_name, status=True, username=username,
                                     created_at=datetime.datetime.now()))
 
         db = self.mongo_client[db_name]
         db.create_collection('holder')  # temp table so the db will create
+
+        self.session.commit()
+
+        self.add_permissions_to_user(username, password, deployment_id, config['MONGO_PERMISSION']['read_and_write'])
 
         self.session.commit()
         return deployment_id
@@ -216,8 +219,12 @@ class MongoDBService(DBService):
         self.check_username_valid(username)
         self.check_permission_exist(username, password, deployment_id, permission)
 
-        self.session.add(UserPermission(username=username, deployment_id=deployment_id, permission=permission, hashed_password=self.hash_password(password)))
+        self.session.add(UserPermission(id=str(uuid1()) ,username=username, deployment_id=deployment_id, permission_level=permission, hashed_password=self.hash_password(password)))
 
-        self.mongo_client[str(deployment.db_name)].add_user(username, password, roles=[{'role': permission,'db': str(deployment.db_name)}])
+        self.mongo_client[str(deployment.db_name)].command(
+            'createUser', username,
+            pwd=password,
+            roles=[{'role': permission, 'db': str(deployment.db_name)}]
+        )
 
         self.session.commit()
