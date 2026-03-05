@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, Column, String, BOOLEAN, TIMESTAMP, and_, 
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from src.exceptions import DeploymentException
+from src.exceptions import DeploymentException, UserException
 from hashlib import sha256
 from sqlalchemy import Enum
 
@@ -30,8 +30,8 @@ class Deployment(Base):
     created_at = Column(TIMESTAMP)
 
 
-class User(Base):
-    __tablename__ = 'users'
+class UserPermission(Base):
+    __tablename__ = 'user_permissions'
     deployment_id = Column(ForeignKey('deployments.id'))
     username = Column(String)
     hashed_password = Column(String)
@@ -57,6 +57,10 @@ class DBService(ABC):
 
     @abstractmethod
     def get_deployment_connection_string(self, db_name: str, username: str) -> str:
+        pass
+
+    @abstractmethod
+    def add_permissions_to_user(self, username: str, password: str, deployment_id: str, permission) -> None:
         pass
 
 
@@ -148,3 +152,37 @@ class MongoDBService(DBService):
         self.check_deployment_username(deployment, username)
 
         return f"mongodb://{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}/{deployment.db_name}"
+
+    @staticmethod
+    def check_password_valid(password: str) -> None:
+        if not (len(password) >= 8 and any(c.isupper() for c in password) and any(c.islower() for c in password)):
+            raise UserException("Invalid password, must have at least 8 letters, 1 upper and 1 lower case letters")
+
+
+    @staticmethod
+    def is_username_valid(username: str) -> bool:
+        return len(username) >= 3
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        return sha256(password.encode()).hexdigest()
+
+    def get_checked_password_match_hash(self, username: str, deployment_id: str, password: str) -> type[UserPermission]:
+        permission = self.session.query(UserPermission).filter(
+            and_(UserPermission.username == username,
+         UserPermission.deployment_id == deployment_id,
+                 UserPermission.hashed_password == self.hash_password(password))).first()
+
+        if not permission:
+            raise UserException("Permission not found")
+        else:
+            return permission
+
+    def add_permissions_to_user(self, username: str, password: str, deployment_id: str, permission) -> None:
+        deployment = self.get_deployment_by_id(deployment_id)
+
+        self.check_deployment_exist(deployment)
+        self.check_deployment_username(deployment, username)
+        self.check_password_valid(password)
+
+
