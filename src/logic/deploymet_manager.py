@@ -40,7 +40,7 @@ class UserPermission(Base):
 
 class DBService(ABC):
     @abstractmethod
-    def new_deployment(self, db_name: str, username: str) -> str:
+    def new_deployment(self, db_name: str, username: str, password: str) -> str:
         pass
 
     @abstractmethod
@@ -48,15 +48,15 @@ class DBService(ABC):
         pass
 
     @abstractmethod
-    def update_database_name(self, deployment_id: str, new_db_name: str, username: str) -> str:
+    def update_database_name(self, deployment_id: str, new_db_name: str, username: str, password: str) -> str:
         pass
 
     @abstractmethod
-    def drop_deployment(self, deployment_id: str, username: str) -> None:
+    def drop_deployment(self, deployment_id: str, username: str, password: str) -> None:
         pass
 
     @abstractmethod
-    def get_deployment_connection_string(self, db_name: str, username: str) -> str:
+    def get_deployment_connection_string(self, db_name: str, username: str, password: str) -> str:
         pass
 
     @abstractmethod
@@ -111,7 +111,12 @@ class MongoDBService(DBService):
     def hash_password(password: str) -> str:
         return sha256(password.encode()).hexdigest()
 
-    def get_checked_password_match_hash(self, username: str, deployment_id: str, password: str) -> type[UserPermission]:
+    @staticmethod
+    def check_editing_permission(permission: type[UserPermission]) -> None:
+        if permission.permission_level != config['MONGO_PERMISSION']['read_and_write']:
+            raise UserException("User dont have editing permission")
+
+    def get_checked_permission(self, username: str, deployment_id: str, password: str) -> type[UserPermission]:
         permission = self.session.query(UserPermission).filter(
             and_(UserPermission.username == username,
                  UserPermission.deployment_id == deployment_id,
@@ -131,7 +136,7 @@ class MongoDBService(DBService):
         ).first():
             raise UserException("Permission already exists")
 
-    def new_deployment(self, db_name: str, username: str) -> str:
+    def new_deployment(self, db_name: str, username: str, password: str) -> str:
         if self.session.query(Deployment).filter(
                 and_(Deployment.db_name == db_name, Deployment.status == True)).first():
             raise DeploymentException("Deployment name already exists")
@@ -140,6 +145,9 @@ class MongoDBService(DBService):
         self.check_username_valid(username)
 
         deployment_id: str = str(uuid1())
+
+        self.add_permissions_to_user(username, password, deployment_id, config['MONGO_PERMISSION']['read_and_write'])
+
         self.session.add(Deployment(id=deployment_id, db_name=db_name, status=True, username=username,
                                     created_at=datetime.datetime.now()))
 
@@ -155,7 +163,8 @@ class MongoDBService(DBService):
 
         return {'id': deployment.id, 'db_name': deployment.db_name, 'created_at': deployment.created_at}
 
-    def update_database_name(self, deployment_id: str, new_db_name: str, username: str) -> str:
+
+    def update_database_name(self, deployment_id: str, new_db_name: str, username: str, password: str) -> str:
         deployment = self.get_deployment_by_id(deployment_id)
 
         self.check_deployment_exist(deployment)
@@ -163,32 +172,43 @@ class MongoDBService(DBService):
         self.check_deployment_name_availability(new_db_name)
         self.check_name_startwith_username(new_db_name, username)
 
+        permission = self.get_checked_permission(username, deployment_id, password)
+        self.check_editing_permission(permission)
+
         db = self.mongo_client[str(deployment.db_name)]
         # TODO : change db name
 
         deployment.db_name = new_db_name
+
         self.session.commit()
 
         return deployment_id
 
-    def drop_deployment(self, deployment_id: str, username: str) -> None:
+    def drop_deployment(self, deployment_id: str, username: str, password: str) -> None:
         deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
+
+        permission = self.get_checked_permission(username, deployment_id, password)
+        self.check_editing_permission(permission)
+
+        deployment_permissions = self.session.query(UserPermission).filter(UserPermission.deployment_id == deployment_id)
+        deployment_permissions.delete()
 
         deployment.status = False
         self.mongo_client.drop_database(str(deployment.db_name))
 
         self.session.commit()
 
-    def get_deployment_connection_string(self, deployment_id: str, username: str) -> str:
+    def get_deployment_connection_string(self, deployment_id: str, username: str, password: str) -> str:
         deployment = self.get_deployment_by_id(deployment_id)
         self.check_deployment_exist(deployment)
         self.check_deployment_username(deployment, username)
+        self.get_checked_permission(username, deployment_id, password)
 
-        return f"mongodb://{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}/{deployment.db_name}"
+        return f"mongodb://{username}:{password}@{config['DEPLOYMENTS_PRAM']['mongo_host']}:{config['DEPLOYMENTS_PRAM']['mongo_port']}/{deployment.db_name}"
 
-    def add_permissions_to_user(self, username: str, password: str, deployment_id: str, permission) -> None:
+    def add_permissions_to_user(self, username: str, password: str, deployment_id: str, permission: str) -> None:
         deployment = self.get_deployment_by_id(deployment_id)
 
         self.check_deployment_exist(deployment)
