@@ -14,7 +14,7 @@ mongo_deployment: DBService = MongoDBService()
 
 @router.post("/deployments/")
 def create_new_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(security)], request: DBNameRequest):
-    deployment_id = mongo_deployment.new_deployment(request.db_name, credentials.username)
+    deployment_id = mongo_deployment.new_deployment(request.db_name, credentials.username, credentials.password)
     return JSONResponse(
         status_code=200,
         content={"id": deployment_id}
@@ -32,7 +32,7 @@ def get_deployment(deployment_id: str):
 @router.put('/deployments/{deployment_id}')
 def update_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(security)], deployment_id: str,
                       request: DBNameRequest):
-    deployment_id = mongo_deployment.update_database_name(deployment_id, request.db_name, credentials.username)
+    deployment_id = mongo_deployment.update_database_name(deployment_id, request.db_name, credentials.username, credentials.password)
     return JSONResponse(
         status_code=200,
         content={"id": deployment_id}
@@ -41,7 +41,7 @@ def update_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(secur
 
 @router.delete('/deployments/{deployment_id}')
 def delete_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(security)], deployment_id: str):
-    mongo_deployment.drop_deployment(deployment_id, credentials.username)
+    mongo_deployment.drop_deployment(deployment_id, credentials.username, credentials.password)
     return Response(
         status_code=204
     )
@@ -49,7 +49,7 @@ def delete_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(secur
 
 @router.get('/deployments/connection_string/{deployment_id}')
 def get_connection_string(credentials: Annotated[HTTPBasicCredentials, Depends(security)], deployment_id: str):
-    url = mongo_deployment.get_deployment_connection_string(deployment_id, credentials.username)
+    url = mongo_deployment.get_deployment_connection_string(deployment_id, credentials.username, credentials.password)
     return JSONResponse(
         status_code=200,
         content={"connection-string": url}

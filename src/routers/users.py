@@ -12,7 +12,7 @@ security = HTTPBasic()
 mongo_deployment: DBService = MongoDBService()
 
 
-@router.post("/deployments/")
+@router.post("/users/{deployment_id}")
 def create_new_deployment(credentials: Annotated[HTTPBasicCredentials, Depends(security)], request: DBNameRequest):
     deployment_id = mongo_deployment.new_deployment(request.db_name, credentials.username)
     return JSONResponse(
