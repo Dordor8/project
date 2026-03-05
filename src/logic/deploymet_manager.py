@@ -122,6 +122,15 @@ class MongoDBService(DBService):
         else:
             return permission
 
+    def check_permission_exist(self, username: str, password: str, deployment_id: str, permission):
+        if self.session.query(UserPermission).filter(
+                and_(UserPermission.username == username,
+                     UserPermission.deployment_id == deployment_id,
+                     UserPermission.permission == permission,
+                     UserPermission.hashed_password == self.hash_password(password))
+        ).first():
+            raise UserException("Permission already exists")
+
     def new_deployment(self, db_name: str, username: str) -> str:
         if self.session.query(Deployment).filter(
                 and_(Deployment.db_name == db_name, Deployment.status == True)).first():
@@ -185,6 +194,7 @@ class MongoDBService(DBService):
         self.check_deployment_exist(deployment)
         self.check_password_valid(password)
         self.check_username_valid(username)
+        self.check_permission_exist(username, password, deployment_id, permission)
 
         self.session.add(UserPermission(username=username, deployment_id=deployment_id, permission=permission, hashed_password=self.hash_password(password)))
 
