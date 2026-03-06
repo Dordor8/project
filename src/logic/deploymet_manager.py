@@ -87,7 +87,7 @@ class MongoDBService(DBService):
     def check_deployment_name_availability(self, db_name: str):
         if self.session.query(Deployment).filter(
                 and_(Deployment.db_name == db_name, Deployment.status == True)).first():
-            raise DeploymentException("Deployment name do not exists")
+            raise DeploymentException("Deployment name already exists")
 
     def get_deployment_by_id(self, deployment_id: str) -> Deployment | None:
         return self.session.query(Deployment).filter(and_(Deployment.id == deployment_id,
@@ -133,10 +133,7 @@ class MongoDBService(DBService):
             raise UserException("Permission already exists")
 
     def new_deployment(self, db_name: str, username: str, password: str) -> str:
-        if self.session.query(Deployment).filter(
-                and_(Deployment.db_name == db_name, Deployment.status == True)).first():
-            raise DeploymentException("Deployment name already exists")
-
+        self.check_deployment_name_availability(db_name)
         self.check_name_startwith_username(db_name, username)
         self.check_username_valid(username)
 
@@ -166,17 +163,32 @@ class MongoDBService(DBService):
         deployment = self.get_deployment_by_id(deployment_id)
 
         self.check_deployment_exist(deployment)
-        self.check_deployment_name_availability(new_db_name)
         self.check_name_startwith_username(new_db_name, username)
+        self.check_deployment_name_availability(new_db_name)
 
         permission = self.get_checked_permission(username, deployment_id, password)
         self.check_editing_permission(permission)
 
-        db = self.mongo_client[str(deployment.db_name)]
-        # TODO : change db name
+        old_db = self.mongo_client[str(deployment.db_name)]
+        new_db = self.mongo_client[str(new_db_name)]
+
+        for collection in old_db.list_collection_names():
+            documents = old_db[collection].find({})
+            new_db.create_collection(collection)
+            for doc in documents:
+                new_db[collection].insert_one(doc)
+
+        permissions = self.session.query(UserPermission).filter(UserPermission.deployment_id == deployment.id)
+        for permission in permissions:
+            self.mongo_client[str(deployment.db_name)].command(
+                'grantRolesToUser', username,
+                roles=[{'role': permission.permission_level, 'db': str(new_db_name)}]
+            )
+
+        self.mongo_client[str(deployment.db_name)].command('dropAllUsersFromDatabase')
+        self.mongo_client.drop_database(str(deployment.db_name))
 
         deployment.db_name = new_db_name
-
         self.session.commit()
 
         return deployment_id
@@ -192,6 +204,7 @@ class MongoDBService(DBService):
         deployment_permissions.delete()
 
         deployment.status = False
+        self.mongo_client[str(deployment.db_name)].command('dropAllUsersFromDatabase')
         self.mongo_client.drop_database(str(deployment.db_name))
 
         self.session.commit()
