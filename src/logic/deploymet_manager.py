@@ -181,11 +181,15 @@ class MongoDBService(DBService):
         permissions = self.session.query(UserPermission).filter(UserPermission.deployment_id == deployment.id)
         for permission in permissions:
             self.mongo_client[str(deployment.db_name)].command(
-                'grantRolesToUser', username,
+                'grantRolesToUser', permission.username,
                 roles=[{'role': permission.permission_level, 'db': str(new_db_name)}]
             )
 
-        self.mongo_client[str(deployment.db_name)].command('dropAllUsersFromDatabase')
+        for permission in permissions:
+            self.mongo_client[str(deployment.db_name)].command(
+                'revokeRolesFromUser', permission.username,
+                roles=[{'role': permission.permission_level, 'db': str(deployment.db_name)}]
+            )
         self.mongo_client.drop_database(str(deployment.db_name))
 
         deployment.db_name = new_db_name
